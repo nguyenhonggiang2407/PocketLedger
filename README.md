@@ -76,3 +76,11 @@ This project demonstrates end-to-end TypeScript development, HTTP API design, au
 Original application code is MIT licensed. All demo content is fictional; no personal data, credentials, bank data, or generated databases belong in the public repository. Font styles use Google Fonts with a system-font fallback.
 
 Primary implementation references: [Node SQLite](https://nodejs.org/docs/latest-v24.x/api/sqlite.html), [Node crypto](https://nodejs.org/docs/latest-v24.x/api/crypto.html), [Express security](https://expressjs.com/en/advanced/best-practice-security/).
+
+## Screenshots
+
+Captured from the compiled local application with fictional demo data.
+
+![Desktop workspace](docs/screenshots/desktop.jpg)
+
+![Mobile workspace](docs/screenshots/mobile.jpg)

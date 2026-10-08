@@ -53,6 +53,12 @@ const money = (c: number) =>
       style: "currency",
       currency: "USD",
     }).format(c / 100),
+  dateLabel = (date: string) =>
+    new Date(date + "T12:00:00Z").toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    }),
   today = () => {
     const date = new Date();
     return [
@@ -96,12 +102,61 @@ async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new ApiError(response.status, data.error || "Please try again.");
   return data;
 }
+function Icon({ name }: { name: string }) {
+  const paths: Record<string, React.ReactNode> = {
+    overview: (
+      <>
+        <rect x="3" y="3" width="7" height="7" rx="2" />
+        <rect x="14" y="3" width="7" height="7" rx="2" />
+        <rect x="3" y="14" width="7" height="7" rx="2" />
+        <rect x="14" y="14" width="7" height="7" rx="2" />
+      </>
+    ),
+    transactions: <path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4" />,
+    budgets: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="12" cy="12" r="5" />
+        <path d="m12 12 7-7" />
+      </>
+    ),
+    plus: <path d="M12 5v14M5 12h14" />,
+    edit: <path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15l-1 6Z" />,
+    close: <path d="m6 6 12 12M18 6 6 18" />,
+    logout: <path d="M9 4H4v16h5M10 12h11m-4-4 4 4-4 4" />,
+    down: <path d="M12 4v16m-6-6 6 6 6-6" />,
+    up: <path d="M12 20V4m-6 6 6-6 6 6" />,
+    arrow: <path d="M4 12h16m-6-6 6 6-6 6" />,
+  };
+  return (
+    <svg
+      className="ui-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {paths[name] || paths.overview}
+    </svg>
+  );
+}
 const Logo = () => (
   <span className="logo">
-    <span className="logo-mark">
-      p<span>·</span>
+    <img
+      className="logo-mark"
+      src="/pocketledger.svg"
+      width="40"
+      height="40"
+      alt=""
+      aria-hidden="true"
+    />
+    <span className="logo-word">
+      PocketLedger<span className="logo-period">.</span>
     </span>
-    PocketLedger<span className="logo-period">.</span>
   </span>
 );
 function App() {
@@ -210,6 +265,15 @@ function App() {
     };
     window.addEventListener("keydown", escape);
     const previous = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    const background = Array.from(
+      document.querySelectorAll<HTMLElement>(".workspace > .sidebar, .workspace > .main"),
+    );
+    const previousInert = background.map((element) => element.inert);
+    background.forEach((element) => {
+      element.inert = true;
+    });
+    document.body.style.overflow = "hidden";
     const modal = document.querySelector<HTMLElement>('[role="dialog"]');
     const controls = () =>
       Array.from(
@@ -217,7 +281,9 @@ function App() {
           "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]",
         ) || [],
       );
-    controls()[0]?.focus();
+    (
+      modal?.querySelector<HTMLElement>('input[name="amount"]') || controls()[0]
+    )?.focus();
     const trap = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
       const items = controls(),
@@ -235,7 +301,11 @@ function App() {
     return () => {
       window.removeEventListener("keydown", escape);
       window.removeEventListener("keydown", trap);
-      previous?.focus();
+      background.forEach((element, index) => {
+        element.inert = previousInert[index];
+      });
+      document.body.style.overflow = previousOverflow;
+      if (previous?.isConnected) previous.focus();
     };
   }, [dialogKind]);
   async function authenticate(event: FormEvent<HTMLFormElement>) {
@@ -533,6 +603,10 @@ function App() {
         .filter((b) => b.limitCents !== null)
         .reduce((n, b) => n + b.spentCents, 0) || 0;
   const budgets = overview?.budgets || [],
+    plannedCategories = budgets.filter((b) => b.limitCents !== null),
+    overLimitCategories = plannedCategories.filter(
+      (b) => b.spentCents > b.limitCents!,
+    ),
     spending = budgets.filter((b) => b.spentCents > 0),
     maxTrend = Math.max(
       1,
@@ -551,18 +625,19 @@ function App() {
         <span className="side-label">WORKSPACE</span>
         <nav aria-label="Workspace">
           {[
-            ["Overview", "▦"],
-            ["Transactions", "⇄"],
-            ["Budgets", "◒"],
+            ["Overview", "overview"],
+            ["Transactions", "transactions"],
+            ["Budgets", "budgets"],
           ].map(([label, icon]) => (
             <button
               key={label}
               className={tab === label ? "selected" : ""}
               aria-current={tab === label ? "page" : undefined}
+              aria-label={label}
               onClick={() => setTab(label)}
             >
-              <span>{icon}</span>
-              {label}
+              <Icon name={icon} />
+              <span className="nav-label">{label}</span>
               {tab === label && <i />}
             </button>
           ))}
@@ -590,24 +665,26 @@ function App() {
             aria-label="Sign out"
             title="Sign out"
           >
-            ↪
+            <Icon name="logout" />
           </button>
         </div>
       </aside>
       <div className="main">
         <header className="topbar">
           <span>
-            <span className="status-dot" /> Your private workspace
+            <span className="status-dot" aria-hidden="true" /> Your private workspace
           </span>
           <span>
             USD <span className="top-separator">/</span>{" "}
             {user.isDemo ? "DEMO MODE" : "PERSONAL LEDGER"}
           </span>
         </header>
-        <main id="content">
+        <main id="content" tabIndex={-1} aria-busy={loading}>
           <div className="page-heading">
             <div>
-              <span className="eyebrow">MAKE ROOM FOR WHAT MATTERS</span>
+              <span className="eyebrow">
+                {tab} <span aria-hidden="true">/</span> {monthLabel(month)}
+              </span>
               <h1>
                 {tab === "Overview"
                   ? "Your month, in focus."
@@ -625,7 +702,7 @@ function App() {
             </div>
             <div className="heading-actions">
               <label className="month-control">
-                <span className="sr-only">Selected month</span>
+                <span>Selected month</span>
                 <input
                   type="month"
                   value={month}
@@ -649,7 +726,7 @@ function App() {
                   });
                 }}
               >
-                ＋ Add entry
+                <Icon name="plus" /> Add entry
               </button>
             </div>
           </div>
@@ -686,7 +763,7 @@ function App() {
                 <section className="stat balance">
                   <div>
                     <span>ALL-TIME BALANCE</span>
-                    <span>↗</span>
+                    <span aria-hidden="true">↗</span>
                   </div>
                   <strong>{summary ? money(summary.balanceCents) : "—"}</strong>
                   <p>Income minus expenses, across your ledger</p>
@@ -697,7 +774,9 @@ function App() {
                 <section className="stat">
                   <div>
                     <span>MONTHLY INCOME</span>
-                    <span className="stat-symbol green">↙</span>
+                    <span className="stat-symbol green">
+                      <Icon name="down" />
+                    </span>
                   </div>
                   <strong>{summary ? money(summary.incomeCents) : "—"}</strong>
                   <p>Money coming in · {monthLabel(month)}</p>
@@ -705,7 +784,9 @@ function App() {
                 <section className="stat">
                   <div>
                     <span>MONTHLY SPENDING</span>
-                    <span className="stat-symbol orange">↗</span>
+                    <span className="stat-symbol orange">
+                      <Icon name="up" />
+                    </span>
                   </div>
                   <strong>{summary ? money(summary.expenseCents) : "—"}</strong>
                   <p>
@@ -714,7 +795,39 @@ function App() {
                       : "Waiting for monthly totals"}
                   </p>
                 </section>
+                <section
+                  className={"stat difference " + ((summary?.netCents || 0) < 0 ? "is-negative" : "")}
+                >
+                  <div>
+                    <span>MONTHLY DIFFERENCE</span>
+                    <span className="stat-symbol"><Icon name="transactions" /></span>
+                  </div>
+                  <strong>{summary ? money(summary.netCents) : "—"}</strong>
+                  <p>Income minus spending · this month</p>
+                </section>
               </div>
+              {overview && (
+                <section className="plan-summary" aria-label="Monthly category plan">
+                  <span className="plan-symbol"><Icon name="budgets" /></span>
+                  <div>
+                    <b>
+                      {plannedCategories.length
+                        ? `${plannedCategories.length} of ${budgets.length} categories have a limit`
+                        : "Give your month a little structure"}
+                    </b>
+                    <p>
+                      {overLimitCategories.length
+                        ? `${overLimitCategories.length} ${overLimitCategories.length === 1 ? "category is" : "categories are"} over the limit you set.`
+                        : plannedCategories.length
+                          ? `${money(plannedSpent)} spent in planned categories · ${money(allocated)} allocated.`
+                          : "Set your own category limits to compare your spending."}
+                    </p>
+                  </div>
+                  <button className="text-button" onClick={() => setTab("Budgets")}>
+                    Review budgets <Icon name="arrow" />
+                  </button>
+                </section>
+              )}
               <div className="overview-grid">
                 <section className="panel trend">
                   <div className="panel-head">
@@ -835,8 +948,12 @@ function App() {
                   ) : (
                     <div className="empty">
                       <span>◒</span>
-                      <h3>A clean slate.</h3>
-                      <p>Add an expense to see your month take shape.</p>
+                      <h3>
+                        {loading ? "Updating your month…" : !overview ? "Spending is unavailable." : "A clean slate."}
+                      </h3>
+                      <p>
+                        {loading ? "Your category totals will appear here." : !overview ? "Try again to load this month’s totals." : "Add an expense to see your month take shape."}
+                      </p>
                     </div>
                   )}
                 </section>
@@ -879,7 +996,7 @@ function App() {
                       encodeURIComponent(category)
                     }
                   >
-                    ↓ Export CSV
+                    <Icon name="down" /> Export CSV
                   </a>
                 </div>
               </div>
@@ -894,6 +1011,10 @@ function App() {
               {entries.length ? (
                 <div className="table-scroll">
                   <table>
+                    <caption className="sr-only">
+                      {monthLabel(month)} transactions{category ? `, ${category}` : ""}.{" "}
+                      {tab === "Overview" ? "Latest seven matching entries." : "Latest matching entries."}
+                    </caption>
                     <thead>
                       <tr>
                         <th>Transaction</th>
@@ -912,6 +1033,7 @@ function App() {
                             <td>
                               <div className="entry-title">
                                 <span
+                                  aria-hidden="true"
                                   className={
                                     "category-icon " +
                                     (e.type === "income" ? "income" : "")
@@ -925,21 +1047,18 @@ function App() {
                                     {e.type === "income"
                                       ? "Money in"
                                       : "Money out"}
+                                    <span className="mobile-entry-meta">
+                                      {" "}· {e.category} · {dateLabel(e.date)}
+                                    </span>
                                   </small>
                                 </div>
                               </div>
                             </td>
-                            <td>
+                            <td className="category-column">
                               <span className="category-tag">{e.category}</span>
                             </td>
                             <td className="date-column">
-                              {new Date(
-                                e.date + "T12:00:00Z",
-                              ).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                timeZone: "UTC",
-                              })}
+                              {dateLabel(e.date)}
                             </td>
                             <td
                               className={
@@ -959,7 +1078,7 @@ function App() {
                                     setEditor(e);
                                   }}
                                 >
-                                  ✎
+                                  <Icon name="edit" />
                                 </button>
                                 <button
                                   aria-label={
@@ -970,7 +1089,7 @@ function App() {
                                     setConfirmDelete(e);
                                   }}
                                 >
-                                  ×
+                                  <Icon name="close" />
                                 </button>
                               </div>
                             </td>
@@ -1071,14 +1190,18 @@ function App() {
                       : 0,
                     remaining = (b.limitCents || 0) - b.spentCents;
                   return (
-                    <section className="panel budget-card" key={b.category}>
+                    <section
+                      className={"panel budget-card " + (b.limitCents === null ? "unplanned" : remaining < 0 ? "over-limit" : "planned")}
+                      key={b.category}
+                    >
                       <div>
-                        <span className="category-icon">
+                        <span className="category-icon" aria-hidden="true">
                           {icons[b.category]}
                         </span>
                         <h3>{b.category}</h3>
                         <button
                           className="text-button"
+                          aria-label={(b.limitCents ? "Edit " : "Set ") + b.category + " monthly limit"}
                           onClick={() => {
                             setError("");
                             setBudgetEdit(b);
@@ -1087,6 +1210,9 @@ function App() {
                           {b.limitCents ? "Edit" : "Set limit"}
                         </button>
                       </div>
+                      <span className="budget-state">
+                        {b.limitCents === null ? "No limit set" : remaining < 0 ? "Over your limit" : remaining === 0 ? "At your limit" : "Within your limit"}
+                      </span>
                       <p>
                         <strong>{money(b.spentCents)}</strong>
                         <span>
@@ -1183,7 +1309,7 @@ function App() {
                 aria-label="Close entry form"
                 onClick={() => setEditor(null)}
               >
-                ×
+                <Icon name="close" />
               </button>
             </div>
             {error && (
@@ -1220,6 +1346,7 @@ function App() {
                     pattern="(?:0|[1-9][0-9]{0,6})(?:\.[0-9]{1,2})?"
                     required
                     placeholder="0.00"
+                    aria-describedby="entry-amount-help"
                     defaultValue={
                       editor.amountCents === undefined
                         ? ""
@@ -1263,8 +1390,9 @@ function App() {
                   placeholder="e.g. Lunch on campus"
                 />
               </label>
-              <p className="fine">
-                Use up to two decimal places. Entries are saved to your account.
+              <p className="fine form-help" id="entry-amount-help">
+                Enter a positive USD amount, such as 12.50. Use up to two decimal places.
+                Your entry is saved only when you choose Save entry.
               </p>
               <div className="modal-actions">
                 <button
@@ -1301,7 +1429,7 @@ function App() {
                 aria-label="Close budget form"
                 onClick={() => setBudgetEdit(null)}
               >
-                ×
+                <Icon name="close" />
               </button>
             </div>
             {error && (
@@ -1317,6 +1445,7 @@ function App() {
                   inputMode="decimal"
                   required
                   placeholder="0.00"
+                  aria-describedby="budget-amount-help"
                   defaultValue={
                     budgetEdit.limitCents === null
                       ? ""
@@ -1324,7 +1453,7 @@ function App() {
                   }
                 />
               </label>
-              <p className="fine">
+              <p className="fine form-help" id="budget-amount-help">
                 Spent this month: {money(budgetEdit.spentCents)}. Setting a
                 limit never changes your entries.
               </p>
@@ -1360,7 +1489,7 @@ function App() {
                 aria-label="Cancel deletion"
                 onClick={() => setConfirmDelete(null)}
               >
-                ×
+                <Icon name="close" />
               </button>
             </div>
             <p>

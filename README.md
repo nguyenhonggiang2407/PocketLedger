@@ -1,3 +1,5 @@
+<img src="public/pocketledger.svg" alt="PocketLedger pocket-and-ledger logo" width="56" height="56" />
+
 # PocketLedger
 
 A private student budgeting workspace: record everyday income and expenses, plan monthly categories, and understand a month's spending without connecting a bank account.
@@ -73,13 +75,13 @@ Use the [five-minute demo guide](docs/DEMO_GUIDE.md) to walk through the product
 
 This project demonstrates end-to-end TypeScript development, HTTP API design, authentication and tenant isolation, exact money representation, practical SQLite persistence, accessibility and responsive UI, and adversarial integration testing. It does not claim users improved their financial outcomes.
 
-Original application code is MIT licensed. All demo content is fictional; no personal data, credentials, bank data, or generated databases belong in the public repository. Font styles use Google Fonts with a system-font fallback.
+Original application code and the pocket-and-ledger SVG mark are MIT licensed. The same lightweight original SVG is used in the app and as its favicon. All demo content is fictional; no personal data, credentials, bank data, or generated databases belong in the public repository. The interface uses system fonts and needs no external font or image service.
 
 Primary implementation references: [Node SQLite](https://nodejs.org/docs/latest-v24.x/api/sqlite.html), [Node crypto](https://nodejs.org/docs/latest-v24.x/api/crypto.html), [Express security](https://expressjs.com/en/advanced/best-practice-security/).
 
 ## Screenshots
 
-Captured from the compiled local application with fictional demo data.
+Captured from the compiled local application with fictional demo data after the October 2026 workspace and logo update.
 
 ![Desktop workspace](docs/screenshots/desktop.jpg)
 

@@ -154,6 +154,8 @@ export class Store {
       const prior = new Date(m + "-01T00:00:00Z");
       prior.setUTCMonth(prior.getUTCMonth() - 1);
       const previous = prior.toISOString().slice(0, 7);
+      // January 2000 has no preceding month inside the supported date range.
+      if (previous < "2000-01") return;
       add.run(
         uid,
         "income",

@@ -30,7 +30,7 @@ npm run dev
 
 Open **http://127.0.0.1:5174**. Vite forwards `/api` to the backend on 127.0.0.1:3002. Use the exact 127.0.0.1 URL because mutations check the configured browser origin. Keep the default backend port for development unless you also update the Vite proxy. `.env` is read by the backend, and is never committed.
 
-Choose **Explore a private demo**, or create your own account for an empty workspace. Sample entries are labeled fictional. Loading sample data into an existing account only works when its transaction and budget tables are empty; it never replaces existing records.
+Choose **Explore a private demo**, or create your own account for an empty workspace. Sample entries are labeled fictional and use the month selected in your browser, including near a timezone month boundary. Loading sample data into an existing account only works when its transaction and budget tables are empty; it never replaces existing records.
 
 ## Verify and run the build
 
@@ -58,7 +58,7 @@ SQLite creates tables automatically at startup. Foreign keys are enforced and WA
 
 Passwords use unique salts and Node scrypt. The browser receives an HttpOnly, SameSite=Strict cookie; Secure is enabled for production. Only the token hash is stored in SQLite. Authenticated mutations require a session CSRF token and JSON content. Provided Origin headers must match `APP_ORIGIN`. Authentication attempts are limited per IP in process memory. No session tokens are stored in localStorage.
 
-The nine integration tests use temporary/in-memory databases and synthetic accounts. They cover exact cent arithmetic, input/date limits, hashing/session restoration/logout, concurrent duplicate signup, oversized requests, ownership for edit/delete/read/export, CSRF/origin checks, filters/budget totals, CSV formula protection and exports beyond the screen's 500-row limit, secure cookie flags/session expiration, isolated demos and persistence across SQLite reopen. Tests do not use real financial or account data. GitHub Actions runs the tests and production build on Node 24.
+The ten integration tests use temporary/in-memory databases and synthetic accounts. They cover exact cent arithmetic, input/date limits, hashing/session restoration/logout, concurrent duplicate signup, oversized requests, ownership for edit/delete/read/export, CSRF/origin checks, filters/budget totals, CSV formula protection and exports beyond the screen's 500-row limit, secure cookie flags/session expiration, isolated demos, requested demo months and rejected inputs without partial records, and persistence across SQLite reopen. Tests do not use real financial or account data. GitHub Actions runs the tests and production build on Node 24.
 
 ## Scope and limits
 

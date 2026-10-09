@@ -194,6 +194,13 @@ export function createApp(
   });
   app.post("/api/auth/demo", async (req, res) => {
     rate(req, "demo", 5);
+    const data = z
+      .object({ month: z.string().optional() })
+      .strict()
+      .parse(req.body);
+    const selectedMonth = month(
+      data.month ?? new Date().toISOString().slice(0, 7),
+    );
     const name = "Alex Student",
       email = "demo-" + randomBytes(16).toString("hex") + "@example.invalid",
       hash = await hashPassword(randomBytes(32).toString("hex"));
@@ -203,7 +210,7 @@ export function createApp(
       )
       .run(name, email, hash);
     const uid = Number(row.lastInsertRowid);
-    store.demo(uid, new Date().toISOString().slice(0, 7));
+    store.demo(uid, selectedMonth);
     res.status(201).json(session(uid, res));
   });
   app.post("/api/auth/logout", requireAuth, (req, res) => {

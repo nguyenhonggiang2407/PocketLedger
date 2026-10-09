@@ -337,7 +337,7 @@ function App() {
     try {
       const result = await api<{ user: User; csrf: string }>("/auth/demo", {
         method: "POST",
-        body: "{}",
+        body: JSON.stringify({ month }),
       });
       csrf = result.csrf;
       setUser(result.user);

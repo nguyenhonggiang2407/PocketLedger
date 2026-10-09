@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "./store.js";
 import { createApp, verifyPassword } from "./app.js";
-import { moneyToCents, decimal, csvCell } from "./domain.js";
+import { moneyToCents, decimal, csvCell, validDate } from "./domain.js";
 const password = "Fictional-Test-Password-2026";
 const fixture = () => {
   const store = new Store(":memory:");
@@ -326,6 +326,60 @@ test("private demo workspaces are isolated and seeding never overwrites existing
     store.close();
   }
 });
+test("private demo uses the requested calendar month and validates it before creating records", async () => {
+  const { store, app } = fixture();
+  try {
+    for (const selectedMonth of ["2026-13", "1999-12", null])
+      await request(app)
+        .post("/api/auth/demo")
+        .send({ month: selectedMonth })
+        .expect(400);
+    for (const table of ["users", "sessions", "transactions", "budgets"])
+      assert.equal(
+        store.db.prepare(`SELECT COUNT(*) n FROM ${table}`).get()?.n,
+        0,
+      );
+    const agent = request.agent(app);
+    const selectedMonth = "2030-02";
+    const demo = await agent
+      .post("/api/auth/demo")
+      .send({ month: selectedMonth })
+      .expect(201);
+    const overview = await agent
+      .get("/api/overview?month=" + selectedMonth)
+      .expect(200);
+    assert.equal(overview.body.summary.count, 12);
+    assert.equal(overview.body.summary.incomeCents, 148000);
+    assert.equal(overview.body.summary.expenseCents, 68240);
+    assert.equal(overview.body.summary.balanceCents, 143560);
+    assert.equal(store.entries(demo.body.user.id, selectedMonth).length, 12);
+    assert.equal(store.entries(demo.body.user.id, "2030-01").length, 3);
+    assert.equal(
+      store.db
+        .prepare("SELECT COUNT(*) n FROM budgets WHERE user_id=? AND month=?")
+        .get(demo.body.user.id, selectedMonth)?.n,
+      5,
+    );
+    const boundary = request.agent(app);
+    const earliest = await boundary
+      .post("/api/auth/demo")
+      .send({ month: "2000-01" })
+      .expect(201);
+    const dates = store.db
+      .prepare("SELECT date FROM transactions WHERE user_id=?")
+      .all(earliest.body.user.id) as { date: string }[];
+    assert.equal(dates.length, 12);
+    assert(dates.every((row) => validDate(row.date)));
+    assert.equal(
+      (await boundary.get("/api/overview?month=2000-01").expect(200)).body
+        .summary.balanceCents,
+      79760,
+    );
+  } finally {
+    store.close();
+  }
+});
+
 test("SQLite retains transactions, budgets and hashed sessions across reopen", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pocketledger-test-"));
   const path = join(dir, "ledger.sqlite");

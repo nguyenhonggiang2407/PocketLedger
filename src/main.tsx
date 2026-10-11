@@ -375,9 +375,9 @@ function App() {
   }
   async function saveEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editor) return;
-    setBusy(true);
+    if (!editor || busy) return;
     const form = new FormData(event.currentTarget);
+    setBusy(true);
     try {
       await api("/transactions" + (editor.id ? "/" + editor.id : ""), {
         method: editor.id ? "PUT" : "POST",
@@ -401,14 +401,15 @@ function App() {
   }
   async function saveBudget(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true);
+    if (!budgetEdit || busy) return;
     const form = new FormData(event.currentTarget);
+    setBusy(true);
     try {
       await api("/budgets", {
         method: "PUT",
         body: JSON.stringify({
           month,
-          category: budgetEdit!.category,
+          category: budgetEdit.category,
           amount: form.get("amount"),
         }),
       });
@@ -1317,11 +1318,12 @@ function App() {
                 {error}
               </div>
             )}
-            <form onSubmit={saveEntry}>
+            <form onSubmit={saveEntry} aria-busy={busy}>
               <label>
                 Type
                 <select
                   name="type"
+                  disabled={busy}
                   value={editor.type}
                   onChange={(e) =>
                     setEditor({
@@ -1341,6 +1343,7 @@ function App() {
                   Amount (USD)
                   <input
                     name="amount"
+                    disabled={busy}
                     type="text"
                     inputMode="decimal"
                     pattern="(?:0|[1-9][0-9]{0,6})(?:\.[0-9]{1,2})?"
@@ -1359,6 +1362,7 @@ function App() {
                   Date
                   <input
                     name="date"
+                    disabled={busy}
                     type="date"
                     min="2000-01-01"
                     max="2099-12-31"
@@ -1371,6 +1375,7 @@ function App() {
                 Category
                 <select
                   name="category"
+                  disabled={busy}
                   value={editor.category}
                   onChange={(e) =>
                     setEditor({ ...editor, category: e.target.value })
@@ -1385,6 +1390,7 @@ function App() {
                 Note <span className="optional">optional</span>
                 <input
                   name="note"
+                  disabled={busy}
                   maxLength={300}
                   defaultValue={editor.note}
                   placeholder="e.g. Lunch on campus"
@@ -1437,11 +1443,12 @@ function App() {
                 {error}
               </div>
             )}
-            <form onSubmit={saveBudget}>
+            <form onSubmit={saveBudget} aria-busy={busy}>
               <label>
                 Monthly limit (USD)
                 <input
                   name="amount"
+                  disabled={busy}
                   inputMode="decimal"
                   required
                   placeholder="0.00"

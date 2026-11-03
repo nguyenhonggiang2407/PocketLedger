@@ -7,6 +7,10 @@
 Ứng dụng ghi chép thu chi và theo dõi ngân sách cá nhân, dùng React, TypeScript,
 Express và SQLite.
 
+Điểm kỹ thuật: tính tiền bằng cent nguyên, truy vấn theo chủ sở hữu và sao chép
+ngân sách trong transaction. [Kết quả kiểm chứng 03/11/2026](docs/portfolio-verification.md)
+ghi rõ kiểm thử local, ảnh mới và phạm vi kiểm tra hosting.
+
 ## Chức năng
 
 - Thêm, sửa, xóa khoản thu và chi.
@@ -31,6 +35,7 @@ npm run dev
 
 Mở http://127.0.0.1:5174. Vite chuyển `/api` đến backend ở cổng 3002.
 Có thể sao chép `.env.example` thành `.env` để thay cấu hình.
+Trên PowerShell: `Copy-Item .env.example .env`.
 
 Chọn **Explore a private demo** để tạo không gian dùng thử với dữ liệu hư cấu,
 hoặc đăng ký tài khoản để bắt đầu với sổ trống.

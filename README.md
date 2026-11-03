@@ -99,6 +99,20 @@ sao chép ngân sách khi mất phản hồi, phiên hết hạn và màn hình 
 
 Xem [cách dùng thử](docs/demo.md).
 
+## Kế hoạch ngân sách
+
+![Ngân sách trên máy tính](docs/screenshots/budgets-desktop.png)
+
+<details>
+<summary>Ngân sách trên điện thoại</summary>
+
+![Ngân sách trên điện thoại](docs/screenshots/budgets-mobile.png)
+
+</details>
+
+Bản nâng cấp vượt qua **19 kiểm thử API/logic và 5 kiểm thử trình duyệt**, cùng Docker và
+kiểm tra dữ liệu sau khi khởi động lại container. [Xem lần kiểm tra](https://github.com/nguyenhonggiang2407/PocketLedger/actions/runs/41574358655).
+
 ## Hình ảnh
 
 ![Giao diện máy tính](docs/screenshots/desktop.jpg)

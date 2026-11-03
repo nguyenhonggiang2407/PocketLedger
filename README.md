@@ -1,5 +1,7 @@
 # PocketLedger
 
+**Hosting demo:** đã có cấu hình Render Free. Xem [cách triển khai và giới hạn dữ liệu tạm](docs/render-free.md). Dữ liệu SQLite có thể mất sau khi host ngủ/restart; chưa có URL demo được xác minh.
+
 <img src="public/pocketledger.svg" width="56" height="56" alt="PocketLedger" />
 
 Ứng dụng ghi chép thu chi và theo dõi ngân sách cá nhân, dùng React, TypeScript,

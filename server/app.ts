@@ -11,6 +11,12 @@ import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { Store } from "./store.js";
 import {
+  pageLimit,
+  readCursor,
+  nextCursor,
+  previousMonth,
+} from "./pagination.js";
+import {
   AppError,
   moneyToCents,
   decimal,
@@ -142,7 +148,10 @@ export function createApp(
     });
     return { user: store.user(uid), csrf };
   };
-  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+  app.get("/api/health", (_req, res) => {
+    store.db.prepare("SELECT 1").get();
+    res.json({ ok: true });
+  });
   app.get("/api/auth/me", (req, res) =>
     res.json(
       req.session
@@ -229,6 +238,18 @@ export function createApp(
     res.json(store.overview(req.session!.uid, month(req.query.month))),
   );
   app.get("/api/transactions", requireAuth, (req, res) => {
+    if (
+      Object.keys(req.query).some(
+        (key) => !["month", "category", "limit", "after"].includes(key),
+      ) ||
+      (req.query.category !== undefined &&
+        typeof req.query.category !== "string")
+    ) {
+      throw new AppError(
+        400,
+        "Use month, category, limit and after once each.",
+      );
+    }
     const m = month(req.query.month);
     const category =
       typeof req.query.category === "string" ? req.query.category : "";
@@ -237,8 +258,17 @@ export function createApp(
       !allCategories.includes(category as (typeof allCategories)[number])
     )
       throw new AppError(400, "Choose a valid category.");
-    const entries = store.entries(req.session!.uid, m, category);
-    res.json({ entries: entries.slice(0, 500), total: entries.length });
+    const uid = req.session!.uid;
+    const limit = pageLimit(req.query.limit);
+    const after = readCursor(req.query.after, uid, m, category);
+    const result = store.page(uid, m, category, limit, after);
+    res.json({
+      entries: result.entries,
+      total: result.total,
+      nextCursor: result.hasMore
+        ? nextCursor(uid, m, category, result.entries.at(-1)!)
+        : null,
+    });
   });
   const entryData = (body: unknown) => {
     const d = transaction.parse(body);
@@ -311,6 +341,13 @@ export function createApp(
       )
       .run(req.session!.uid, m, d.category, cents);
     res.json({ ok: true });
+  });
+  app.post("/api/budgets/copy", requireAuth, (req, res) => {
+    const input = z.object({ month: z.string() }).strict().parse(req.body);
+    const target = month(input.month);
+    const source = previousMonth(target);
+    const copied = store.copyBudgets(req.session!.uid, target, source);
+    res.status(201).json({ copied, sourceMonth: source, month: target });
   });
   app.delete("/api/budgets/:category", requireAuth, (req, res) => {
     const m = month(req.query.month),

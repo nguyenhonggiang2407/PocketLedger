@@ -179,6 +179,12 @@ function App() {
     [confirmDelete, setConfirmDelete] = useState<Entry | null>(null);
   const busyRef = useRef(busy);
   busyRef.current = busy;
+  const [cursor, setCursor] = useState<string | null>(null),
+    [loadingMore, setLoadingMore] = useState(false),
+    [moreError, setMoreError] = useState("");
+  const listEpoch = useRef(0),
+    moreBusy = useRef(false),
+    listAbort = useRef<AbortController | null>(null);
   const dialogKind = editor
     ? "entry"
     : budgetEdit
@@ -206,6 +212,12 @@ function App() {
     if (!user) return;
     let current = true;
     const abort = new AbortController();
+    listAbort.current = abort;
+    listEpoch.current++;
+    moreBusy.current = false;
+    setCursor(null);
+    setLoadingMore(false);
+    setMoreError("");
     setLoading(true);
     setError("");
     // Avoid displaying one month's amounts under a newly selected month.
@@ -214,10 +226,10 @@ function App() {
     setTotal(0);
     Promise.all([
       api<Overview>("/overview?month=" + month, { signal: abort.signal }),
-      api<{ entries: Entry[]; total: number }>(
+      api<{ entries: Entry[]; total: number; nextCursor: string | null }>(
         "/transactions?month=" +
           month +
-          "&category=" +
+          "&limit=50&category=" +
           encodeURIComponent(category),
         { signal: abort.signal },
       ),
@@ -227,6 +239,7 @@ function App() {
           setOverview(o);
           setEntries(t.entries);
           setTotal(t.total);
+          setCursor(t.nextCursor);
         }
       })
       .catch((e) => {
@@ -246,6 +259,7 @@ function App() {
       });
     return () => {
       current = false;
+      listEpoch.current++;
       abort.abort();
     };
   }, [user, month, category, revision]);
@@ -267,7 +281,9 @@ function App() {
     const previous = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     const background = Array.from(
-      document.querySelectorAll<HTMLElement>(".workspace > .sidebar, .workspace > .main"),
+      document.querySelectorAll<HTMLElement>(
+        ".workspace > .sidebar, .workspace > .main",
+      ),
     );
     const previousInert = background.map((element) => element.inert);
     background.forEach((element) => {
@@ -397,6 +413,84 @@ function App() {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+  async function loadMore() {
+    if (moreBusy.current || loading || !cursor || !user) return;
+    const generation = listEpoch.current;
+    moreBusy.current = true;
+    setLoadingMore(true);
+    setMoreError("");
+    try {
+      const data = await api<{
+        entries: Entry[];
+        total: number;
+        nextCursor: string | null;
+      }>(
+        "/transactions?month=" +
+          month +
+          "&limit=50&category=" +
+          encodeURIComponent(category) +
+          "&after=" +
+          encodeURIComponent(cursor),
+        { signal: listAbort.current?.signal },
+      );
+      if (generation !== listEpoch.current) return;
+      setEntries((previous) => [
+        ...new Map(
+          [...previous, ...data.entries].map((entry) => [entry.id, entry]),
+        ).values(),
+      ]);
+      setTotal(data.total);
+      setCursor(data.nextCursor);
+    } catch (e) {
+      if (
+        generation === listEpoch.current &&
+        (e as Error).name !== "AbortError"
+      ) {
+        setMoreError((e as Error).message);
+        if (e instanceof ApiError && e.status === 401) {
+          csrf = "";
+          setUser(null);
+          setEntries([]);
+          setOverview(null);
+          setCursor(null);
+          setEditor(null);
+          setBudgetEdit(null);
+          setConfirmDelete(null);
+          setError("Your session expired. Sign in to your workspace again.");
+        }
+      }
+    } finally {
+      if (generation === listEpoch.current) {
+        moreBusy.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }
+  async function copyBudgets() {
+    if (busyRef.current || loading) return;
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{ copied: number; sourceMonth: string }>(
+        "/budgets/copy",
+        {
+          method: "POST",
+          body: JSON.stringify({ month }),
+        },
+      );
+      setNotice(
+        `${result.copied} budget ${result.copied === 1 ? "limit" : "limits"} copied from ${monthLabel(result.sourceMonth)}.`,
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      // Reload after an uncertain response as well: the copy may already have committed.
+      setRevision((value) => value + 1);
+      setBusy(false);
+      busyRef.current = false;
     }
   }
   async function saveBudget(event: FormEvent<HTMLFormElement>) {
@@ -673,7 +767,8 @@ function App() {
       <div className="main">
         <header className="topbar">
           <span>
-            <span className="status-dot" aria-hidden="true" /> Your private workspace
+            <span className="status-dot" aria-hidden="true" /> Your private
+            workspace
           </span>
           <span>
             USD <span className="top-separator">/</span>{" "}
@@ -797,19 +892,29 @@ function App() {
                   </p>
                 </section>
                 <section
-                  className={"stat difference " + ((summary?.netCents || 0) < 0 ? "is-negative" : "")}
+                  className={
+                    "stat difference " +
+                    ((summary?.netCents || 0) < 0 ? "is-negative" : "")
+                  }
                 >
                   <div>
                     <span>MONTHLY DIFFERENCE</span>
-                    <span className="stat-symbol"><Icon name="transactions" /></span>
+                    <span className="stat-symbol">
+                      <Icon name="transactions" />
+                    </span>
                   </div>
                   <strong>{summary ? money(summary.netCents) : "—"}</strong>
                   <p>Income minus spending · this month</p>
                 </section>
               </div>
               {overview && (
-                <section className="plan-summary" aria-label="Monthly category plan">
-                  <span className="plan-symbol"><Icon name="budgets" /></span>
+                <section
+                  className="plan-summary"
+                  aria-label="Monthly category plan"
+                >
+                  <span className="plan-symbol">
+                    <Icon name="budgets" />
+                  </span>
                   <div>
                     <b>
                       {plannedCategories.length
@@ -824,7 +929,10 @@ function App() {
                           : "Set your own category limits to compare your spending."}
                     </p>
                   </div>
-                  <button className="text-button" onClick={() => setTab("Budgets")}>
+                  <button
+                    className="text-button"
+                    onClick={() => setTab("Budgets")}
+                  >
                     Review budgets <Icon name="arrow" />
                   </button>
                 </section>
@@ -950,10 +1058,18 @@ function App() {
                     <div className="empty">
                       <span>◒</span>
                       <h3>
-                        {loading ? "Updating your month…" : !overview ? "Spending is unavailable." : "A clean slate."}
+                        {loading
+                          ? "Updating your month…"
+                          : !overview
+                            ? "Spending is unavailable."
+                            : "A clean slate."}
                       </h3>
                       <p>
-                        {loading ? "Your category totals will appear here." : !overview ? "Try again to load this month’s totals." : "Add an expense to see your month take shape."}
+                        {loading
+                          ? "Your category totals will appear here."
+                          : !overview
+                            ? "Try again to load this month’s totals."
+                            : "Add an expense to see your month take shape."}
                       </p>
                     </div>
                   )}
@@ -999,22 +1115,31 @@ function App() {
                   >
                     <Icon name="down" /> Export CSV
                   </a>
+                  <button
+                    className="secondary"
+                    type="button"
+                    disabled={loading || busy}
+                    onClick={() => setRevision((value) => value + 1)}
+                  >
+                    Refresh list
+                  </button>
                 </div>
               </div>
               <p className="table-note">
                 {monthLabel(month)}
                 {category ? " · " + category : ""} · Summary and budgets include
-                all categories.{" "}
-                {total > 500
-                  ? "Only the latest 500 entries are shown; export includes all matches."
-                  : ""}
+                all categories. Live list · Use Refresh list after edits in
+                another tab.
               </p>
               {entries.length ? (
                 <div className="table-scroll">
                   <table>
                     <caption className="sr-only">
-                      {monthLabel(month)} transactions{category ? `, ${category}` : ""}.{" "}
-                      {tab === "Overview" ? "Latest seven matching entries." : "Latest matching entries."}
+                      {monthLabel(month)} transactions
+                      {category ? `, ${category}` : ""}.{" "}
+                      {tab === "Overview"
+                        ? "Latest seven matching entries."
+                        : "Latest matching entries."}
                     </caption>
                     <thead>
                       <tr>
@@ -1049,7 +1174,8 @@ function App() {
                                       ? "Money in"
                                       : "Money out"}
                                     <span className="mobile-entry-meta">
-                                      {" "}· {e.category} · {dateLabel(e.date)}
+                                      {" "}
+                                      · {e.category} · {dateLabel(e.date)}
                                     </span>
                                   </small>
                                 </div>
@@ -1058,9 +1184,7 @@ function App() {
                             <td className="category-column">
                               <span className="category-tag">{e.category}</span>
                             </td>
-                            <td className="date-column">
-                              {dateLabel(e.date)}
-                            </td>
+                            <td className="date-column">{dateLabel(e.date)}</td>
                             <td
                               className={
                                 "amount-column " +
@@ -1149,7 +1273,32 @@ function App() {
                     )}
                 </div>
               )}
-              {tab === "Overview" && entries.length > 7 && (
+              {tab === "Transactions" && entries.length > 0 && (
+                <div className="pagination" aria-label="Transaction pages">
+                  <span role="status">
+                    Showing {entries.length} of {total} matching entries
+                  </span>
+                  {cursor && (
+                    <button
+                      className="secondary"
+                      type="button"
+                      disabled={loading || loadingMore || busy}
+                      onClick={() => void loadMore()}
+                    >
+                      {loadingMore
+                        ? "Loading older entries…"
+                        : "Load older entries"}
+                    </button>
+                  )}
+                  {moreError && (
+                    <p role="alert">
+                      {moreError} Your loaded entries are kept; try loading
+                      again.
+                    </p>
+                  )}
+                </div>
+              )}
+              {tab === "Overview" && total > 7 && (
                 <button
                   className="text-button view-all"
                   onClick={() => setTab("Transactions")}
@@ -1184,6 +1333,29 @@ function App() {
                   </span>
                 </div>
               </div>
+              <div className="budget-copy">
+                <div>
+                  <b>Bring last month's plan forward</b>
+                  <p>
+                    Copy category limits into an empty month. Transactions are
+                    kept as they are.
+                  </p>
+                </div>
+                <button
+                  className="secondary"
+                  type="button"
+                  disabled={
+                    busy ||
+                    loading ||
+                    !overview ||
+                    month === "2000-01" ||
+                    budgets.some((budget) => budget.limitCents !== null)
+                  }
+                  onClick={() => void copyBudgets()}
+                >
+                  Copy previous month
+                </button>
+              </div>
               <div className="budget-grid">
                 {budgets.map((b) => {
                   const pct = b.limitCents
@@ -1192,7 +1364,14 @@ function App() {
                     remaining = (b.limitCents || 0) - b.spentCents;
                   return (
                     <section
-                      className={"panel budget-card " + (b.limitCents === null ? "unplanned" : remaining < 0 ? "over-limit" : "planned")}
+                      className={
+                        "panel budget-card " +
+                        (b.limitCents === null
+                          ? "unplanned"
+                          : remaining < 0
+                            ? "over-limit"
+                            : "planned")
+                      }
                       key={b.category}
                     >
                       <div>
@@ -1202,7 +1381,11 @@ function App() {
                         <h3>{b.category}</h3>
                         <button
                           className="text-button"
-                          aria-label={(b.limitCents ? "Edit " : "Set ") + b.category + " monthly limit"}
+                          aria-label={
+                            (b.limitCents ? "Edit " : "Set ") +
+                            b.category +
+                            " monthly limit"
+                          }
                           onClick={() => {
                             setError("");
                             setBudgetEdit(b);
@@ -1212,7 +1395,13 @@ function App() {
                         </button>
                       </div>
                       <span className="budget-state">
-                        {b.limitCents === null ? "No limit set" : remaining < 0 ? "Over your limit" : remaining === 0 ? "At your limit" : "Within your limit"}
+                        {b.limitCents === null
+                          ? "No limit set"
+                          : remaining < 0
+                            ? "Over your limit"
+                            : remaining === 0
+                              ? "At your limit"
+                              : "Within your limit"}
                       </span>
                       <p>
                         <strong>{money(b.spentCents)}</strong>
@@ -1397,8 +1586,9 @@ function App() {
                 />
               </label>
               <p className="fine form-help" id="entry-amount-help">
-                Enter a positive USD amount, such as 12.50. Use up to two decimal places.
-                Your entry is saved only when you choose Save entry.
+                Enter a positive USD amount, such as 12.50. Use up to two
+                decimal places. Your entry is saved only when you choose Save
+                entry.
               </p>
               <div className="modal-actions">
                 <button

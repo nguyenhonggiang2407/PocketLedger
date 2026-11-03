@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-server
+data
+.git
+.env
+.env.*
+!.env.example
+coverage
+docs/screenshots
+*.sqlite*
+*.log
+

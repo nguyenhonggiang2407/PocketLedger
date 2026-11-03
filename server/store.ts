@@ -41,6 +41,75 @@ export class Store {
       )
       .all(uid, selectedMonth, category, category) as unknown as Entry[];
   }
+  page(
+    uid: number,
+    selectedMonth: string,
+    category: string,
+    limit: number,
+    after?: { date: string; id: number },
+  ) {
+    const date = after?.date ?? "9999-12-31";
+    const rows = this.db
+      .prepare(
+        `SELECT id,type,category,amount_cents amountCents,date,note FROM transactions
+       WHERE user_id=? AND date>=? AND date<=? AND (?='' OR category=?)
+       AND (date<? OR (date=? AND id<?)) ORDER BY date DESC,id DESC LIMIT ?`,
+      )
+      .all(
+        uid,
+        selectedMonth + "-01",
+        selectedMonth + "-31",
+        category,
+        category,
+        date,
+        date,
+        after?.id ?? Number.MAX_SAFE_INTEGER,
+        limit + 1,
+      ) as unknown as Entry[];
+    const total = (
+      this.db
+        .prepare(
+          `SELECT count(*) n FROM transactions WHERE user_id=? AND date>=? AND date<=? AND (?='' OR category=?)`,
+        )
+        .get(
+          uid,
+          selectedMonth + "-01",
+          selectedMonth + "-31",
+          category,
+          category,
+        ) as { n: number }
+    ).n;
+    return {
+      entries: rows.slice(0, limit),
+      total,
+      hasMore: rows.length > limit,
+    };
+  }
+  copyBudgets(uid: number, target: string, source: string) {
+    return this.atomic(() => {
+      if (
+        this.db
+          .prepare("SELECT 1 FROM budgets WHERE user_id=? AND month=? LIMIT 1")
+          .get(uid, target)
+      ) {
+        throw new AppError(
+          409,
+          "This month already has budget limits. Nothing was overwritten.",
+        );
+      }
+      const result = this.db
+        .prepare(
+          "INSERT INTO budgets(user_id,month,category,limit_cents) SELECT user_id,?,category,limit_cents FROM budgets WHERE user_id=? AND month=?",
+        )
+        .run(target, uid, source);
+      if (!result.changes)
+        throw new AppError(
+          404,
+          "The previous month has no budget limits to copy.",
+        );
+      return Number(result.changes);
+    });
+  }
   owned(uid: number, id: number): Entry {
     const e = this.db
       .prepare(

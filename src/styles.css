@@ -734,3 +734,44 @@ tbody tr:last-child td { border-bottom: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
 }
+
+.pagination,
+.budget-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 20px 24px;
+}
+.pagination {
+  border-top: 1px solid #e4e9e3;
+  color: #4d6155;
+}
+.pagination p {
+  flex-basis: 100%;
+  margin: 0;
+  color: #8d2e24;
+}
+.budget-copy {
+  margin-bottom: 24px;
+  border: 1px solid #dce5d9;
+  border-radius: 16px;
+  background: #f4f8ef;
+}
+.budget-copy p {
+  margin: 8px 0 0;
+  color: #53634c;
+  line-height: 1.6;
+}
+.budget-copy button {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .pagination,
+  .budget-copy {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 18px;
+  }
+}

@@ -10,6 +10,7 @@ Express và SQLite.
 - Thêm, sửa, xóa khoản thu và chi.
 - Lọc giao dịch theo tháng và danh mục.
 - Đặt ngân sách theo danh mục, xem tiến độ chi và khoản vượt mức.
+- Sao chép hạn mức tháng trước vào tháng đang trống, giữ nguyên giao dịch và các tháng cũ.
 - Xem số dư, tổng thu chi trong tháng và biểu đồ sáu tháng.
 - Xuất các giao dịch đã lọc ra CSV.
 - Đăng ký tài khoản hoặc dùng thử với dữ liệu mẫu riêng.
@@ -64,8 +65,37 @@ CSV áp dụng cùng bộ lọc với danh sách và xử lý các ô có thể 
 ## Giới hạn hiện tại
 
 Ứng dụng chưa kết nối ngân hàng, chuyển đổi tiền tệ hoặc tạo giao dịch định kỳ.
-Mỗi tài khoản có tối đa 10.000 giao dịch. Danh sách hiển thị 500 kết quả gần nhất,
-còn CSV xuất toàn bộ kết quả phù hợp.
+Mỗi tài khoản có tối đa 10.000 giao dịch. Danh sách tải 50 kết quả mỗi lần;
+nút **Load older entries** cho phép xem tiếp toàn bộ kết quả phù hợp, kể cả sau 500 giao dịch.
+Đổi tháng hoặc danh mục sẽ tải lại từ đầu. Lỗi tải trang tiếp theo giữ nguyên các hàng đã xem để thử lại.
+Đây là danh sách dữ liệu hiện tại, chưa phải bản chụp lịch sử; dùng **Refresh list** khi cần tải lại
+sau khi sửa ở tab khác. CSV xuất toàn bộ kết quả phù hợp.
+
+Trong **Budgets**, chọn tháng chưa có hạn mức rồi bấm **Copy previous month**.
+Thao tác sao chép cả nhóm hạn mức trong một transaction, không ghi đè tháng đã có kế hoạch.
+Nếu phản hồi bị mất, ứng dụng tải lại dữ liệu để nhận biết bản sao đã được lưu.
+
+## Docker và kiểm thử trình duyệt
+
+```bash
+docker compose up --build -d
+```
+
+Mở http://127.0.0.1:3002. Compose này dành cho máy cá nhân, chỉ mở cổng trên loopback;
+volume `pocketledger-data` giữ dữ liệu khi khởi động lại. Docker image chạy bằng tài khoản `node`,
+có healthcheck kiểm tra SQLite. Khi đưa lên host thật, cấu hình HTTPS theo [hướng dẫn triển khai](docs/deployment.md).
+
+```bash
+npm run build
+npx playwright install chromium
+npm run test:browser
+```
+
+[GitHub Actions](https://github.com/nguyenhonggiang2407/PocketLedger/actions/workflows/ci.yml)
+chạy kiểm thử API, build, giao diện, Docker và dữ liệu sau khi khởi động lại container.
+Các bài kiểm tra trình duyệt gồm tải hơn 500 giao dịch, lỗi mạng, phản hồi trang cũ đến muộn,
+sao chép ngân sách khi mất phản hồi, phiên hết hạn và màn hình điện thoại.
+Ảnh mới được lưu trong artifact `pocketledger-screenshots` của lần chạy.
 
 Xem [cách dùng thử](docs/demo.md).
 

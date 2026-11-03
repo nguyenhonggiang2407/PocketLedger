@@ -1,0 +1,15 @@
+services:
+  pocketledger:
+    build: .
+    ports:
+      - "127.0.0.1:3002:3002"
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      APP_ORIGIN: http://127.0.0.1:3002
+      COOKIE_SECURE: "false"
+    volumes:
+      - pocketledger-data:/app/data
+    restart: unless-stopped
+volumes:
+  pocketledger-data:

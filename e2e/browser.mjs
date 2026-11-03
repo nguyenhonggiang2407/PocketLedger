@@ -65,6 +65,16 @@ async function transactions(f) {
   await f.page.getByLabel("Selected month", { exact: true }).fill("2030-04");
   await expect(f.page.locator("table tbody tr")).toHaveCount(50);
 }
+async function capture(page, name) {
+  await expect(page.locator(".toast")).toBeHidden({ timeout: 6000 });
+  await page.locator("#content").focus();
+  await page.locator("#content").evaluate((element) => element.blur());
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({
+    path: "docs/screenshots/" + name + ".png",
+    fullPage: true,
+  });
+}
 test(
   "the real list reaches entries beyond 500 and CSV includes exactly the selected category",
   { timeout: 45000 },
@@ -211,10 +221,7 @@ test(
     await f.page.getByLabel("Selected month", { exact: true }).fill("2030-04");
     await expect(food).toContainText("$32.10");
     await expect(copy).toBeDisabled();
-    await f.page.screenshot({
-      path: "docs/screenshots/budgets-desktop.png",
-      fullPage: true,
-    });
+    await capture(f.page, "budgets-desktop");
   },
 );
 test(
@@ -239,10 +246,7 @@ test(
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     );
-    await f.page.screenshot({
-      path: "docs/screenshots/budgets-mobile.png",
-      fullPage: true,
-    });
+    await capture(f.page, "budgets-mobile");
   },
 );
 test(

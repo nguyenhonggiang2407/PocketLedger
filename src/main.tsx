@@ -826,7 +826,7 @@ function App() {
               </button>
             </div>
           </div>
-          {user.isDemo && (
+          {Boolean(user.isDemo) && (
             <div className="demo-banner">
               <b>✦ A space to explore</b>
               <span>

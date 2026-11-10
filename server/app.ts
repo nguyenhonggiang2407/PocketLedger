@@ -44,6 +44,42 @@ const credentials = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   password: z.string().min(10).max(128),
 });
+export async function seedDemoLogin(
+  store: Store,
+  { email, password }: z.infer<typeof credentials>,
+  selectedMonth = month(new Date().toISOString().slice(0, 7)),
+) {
+  function accountExists() {
+    const existing = store.db
+      .prepare("SELECT is_demo FROM users WHERE email=?")
+      .get(email);
+    if (existing && existing.is_demo !== 1)
+      throw new Error("The demo login cannot use a registered account.");
+    return existing !== undefined;
+  }
+  if (accountExists()) return;
+  const id = store.createDemoUser(
+    "Portfolio Demo",
+    email,
+    await hashPassword(password),
+    selectedMonth,
+  );
+  if (id === undefined) accountExists();
+}
+export function configuredDemoLogin(env: NodeJS.ProcessEnv = process.env) {
+  if (env.DEMO_LOGIN_ENABLED !== "1") return;
+  if (!env.DATABASE_PATH?.trim())
+    throw new Error("Demo login requires an explicit demo DATABASE_PATH.");
+  const parsed = credentials.safeParse({
+    email: env.DEMO_LOGIN_EMAIL,
+    password: env.DEMO_LOGIN_PASSWORD,
+  });
+  if (!parsed.success)
+    throw new Error(
+      "Set valid DEMO_LOGIN_EMAIL and DEMO_LOGIN_PASSWORD values for demo login.",
+    );
+  return parsed.data;
+}
 const transaction = z
   .object({
     type: z.enum(["income", "expense"]),
@@ -68,6 +104,12 @@ export function createApp(
     origin = "http://127.0.0.1:5174",
     secure = false,
     staticDir = resolve("dist"),
+    demoLoginEmail,
+  }: {
+    origin?: string;
+    secure?: boolean;
+    staticDir?: string;
+    demoLoginEmail?: string;
   } = {},
 ) {
   const app = express();
@@ -186,8 +228,11 @@ export function createApp(
     rate(req, "login");
     const d = credentials.parse(req.body);
     const row = store.db
-      .prepare("SELECT id,password_hash FROM users WHERE email=?")
-      .get(d.email) as { id: number; password_hash: string } | undefined;
+      .prepare(
+        "SELECT id,password_hash FROM users WHERE email=? AND (is_demo=0 OR email=?)",
+      )
+      .get(d.email, demoLoginEmail ?? null) as
+      { id: number; password_hash: string } | undefined;
     const fallback =
       "00000000000000000000000000000000:" + Buffer.alloc(64).toString("hex");
     if (
@@ -213,13 +258,9 @@ export function createApp(
     const name = "Alex Student",
       email = "demo-" + randomBytes(16).toString("hex") + "@example.invalid",
       hash = await hashPassword(randomBytes(32).toString("hex"));
-    const row = store.db
-      .prepare(
-        "INSERT INTO users(name,email,password_hash,is_demo) VALUES(?,?,?,1)",
-      )
-      .run(name, email, hash);
-    const uid = Number(row.lastInsertRowid);
-    store.demo(uid, selectedMonth);
+    const uid = store.createDemoUser(name, email, hash, selectedMonth);
+    if (uid === undefined)
+      throw new AppError(409, "Try creating the demo again.");
     res.status(201).json(session(uid, res));
   });
   app.post("/api/auth/logout", requireAuth, (req, res) => {

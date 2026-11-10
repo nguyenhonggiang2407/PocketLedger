@@ -5,7 +5,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "./store.js";
-import { createApp, verifyPassword } from "./app.js";
+import {
+  configuredDemoLogin,
+  createApp,
+  seedDemoLogin,
+  verifyPassword,
+} from "./app.js";
 import { moneyToCents, decimal, csvCell, validDate } from "./domain.js";
 const password = "Fictional-Test-Password-2026";
 const fixture = () => {
@@ -30,6 +35,79 @@ const entry = {
   date: "2026-10-05",
   note: "Synthetic lunch",
 };
+
+test("configured demo credentials have a seeded ledger and can only access their own data", async () => {
+  const email = "portfolio-fixture@example.test";
+  assert.equal(
+    configuredDemoLogin({
+      DEMO_LOGIN_EMAIL: email,
+      DEMO_LOGIN_PASSWORD: password,
+    }),
+    undefined,
+  );
+  assert.throws(
+    () => configuredDemoLogin({ DEMO_LOGIN_ENABLED: "1" }),
+    /explicit demo DATABASE_PATH/,
+  );
+  const login = configuredDemoLogin({
+    DEMO_LOGIN_ENABLED: "1",
+    DEMO_LOGIN_EMAIL: email.toUpperCase(),
+    DEMO_LOGIN_PASSWORD: password,
+    DATABASE_PATH: ":memory:",
+  })!;
+  const store = new Store(":memory:");
+  try {
+    await seedDemoLogin(store, login, "2026-10");
+    await seedDemoLogin(
+      store,
+      { ...login, password: "Different fictional password" },
+      "2026-10",
+    );
+    const app = createApp(store, { demoLoginEmail: login.email });
+    const privateOwner = await account(app);
+    await assert.rejects(
+      seedDemoLogin(store, { ...login, email: privateOwner.user.email }),
+      /registered account/,
+    );
+    await privateOwner.agent
+      .post("/api/transactions")
+      .set("X-CSRF-Token", privateOwner.csrf)
+      .send({ ...entry, note: "Private fixture" })
+      .expect(201);
+    const visitor = request.agent(app);
+    await visitor.get("/api/overview?month=2026-10").expect(401);
+    await visitor
+      .post("/api/auth/login")
+      .send({ ...login, password: "Different fictional password" })
+      .expect(401);
+    const authenticated = await visitor
+      .post("/api/auth/login")
+      .send(login)
+      .expect(200);
+    assert.equal(authenticated.body.user.isDemo, 1);
+    const list = await visitor
+      .get("/api/transactions?month=2026-10")
+      .expect(200);
+    assert.equal(list.body.total, 12);
+    assert(
+      list.body.entries.every((item: { note: string }) =>
+        item.note.includes("fictional"),
+      ),
+    );
+    await visitor
+      .post("/api/auth/logout")
+      .set("X-CSRF-Token", authenticated.body.csrf)
+      .send({})
+      .expect(200);
+    await visitor.get("/api/overview?month=2026-10").expect(401);
+    await request(createApp(store))
+      .post("/api/auth/login")
+      .send(login)
+      .expect(401);
+  } finally {
+    store.close();
+  }
+});
 
 test("CSV exports all matching rows beyond the 500-row screen limit and handles hostile notes", async () => {
   const { store, app } = fixture();

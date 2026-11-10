@@ -41,6 +41,17 @@ Chọn **Explore a private demo** để tạo không gian dùng thử với dữ
 hoặc đăng ký tài khoản để bắt đầu với sổ trống.
 Dữ liệu mẫu chỉ được thêm khi tài khoản chưa có giao dịch và ngân sách.
 
+### Tài khoản demo cấu hình qua môi trường
+
+Trong môi trường demo riêng, đặt `DEMO_LOGIN_ENABLED=1` và trỏ `DATABASE_PATH` đến
+database dành riêng cho demo. Cấp `DEMO_LOGIN_EMAIL` và `DEMO_LOGIN_PASSWORD` qua biến
+môi trường hoặc kho bí mật của host. Mật khẩu cần dài 10–128 ký tự. Khởi động ứng dụng rồi
+đăng nhập bằng biểu mẫu thông thường để xem giao dịch và ngân sách hư cấu.
+
+Ứng dụng chỉ khởi tạo một lần và từ chối dùng email đã thuộc tài khoản đăng ký.
+Tài khoản demo chỉ truy cập sổ của chính nó. Chỉ nhập dữ liệu hư cấu vì người dùng
+chung tài khoản sẽ thấy cùng một workspace.
+
 ## Kiểm tra và build
 
 ```bash

@@ -169,86 +169,105 @@ export class Store {
       trend,
     };
   }
-  demo(uid: number, m: string) {
-    this.atomic(() => {
-      if (
-        this.db
-          .prepare("SELECT id FROM transactions WHERE user_id=? LIMIT 1")
-          .get(uid) ||
-        this.db
-          .prepare("SELECT category FROM budgets WHERE user_id=? LIMIT 1")
-          .get(uid)
-      )
-        throw new AppError(
-          409,
-          "Demo data is only available for an empty workspace.",
-        );
-      const add = this.db.prepare(
-        "INSERT INTO transactions(user_id,type,category,amount_cents,date,note) VALUES(?,?,?,?,?,?)",
-      );
-      const items: [string, string, number, number, string][] = [
-        ["income", "Allowance", 120000, 1, "Monthly support · fictional"],
-        ["income", "Work", 28000, 5, "Campus library shift · fictional"],
-        ["expense", "Housing", 52000, 2, "Shared apartment · fictional"],
-        ["expense", "Food", 1245, 3, "Groceries · fictional"],
-        ["expense", "Transport", 3500, 4, "Monthly student pass · fictional"],
-        ["expense", "Study", 2400, 6, "Secondhand textbooks · fictional"],
-        ["expense", "Food", 1860, 8, "Market groceries · fictional"],
-        ["expense", "Leisure", 1200, 9, "Movie with friends · fictional"],
-        ["expense", "Health", 1800, 10, "Pharmacy · fictional"],
-        ["expense", "Food", 650, 11, "Lunch on campus · fictional"],
-        ["expense", "Food", 2735, 12, "Weekly groceries · fictional"],
-        ["expense", "Other", 850, 13, "Laundry · fictional"],
-      ];
-      for (const [type, category, cents, day, note] of items)
-        add.run(
-          uid,
-          type,
-          category,
-          cents,
-          `${m}-${String(day).padStart(2, "0")}`,
-          note,
-        );
-      const budget = this.db.prepare(
-        "INSERT INTO budgets(user_id,month,category,limit_cents) VALUES(?,?,?,?)",
-      );
-      for (const [category, limit] of [
-        ["Food", 16000],
-        ["Housing", 55000],
-        ["Transport", 5000],
-        ["Study", 8000],
-        ["Leisure", 6000],
-      ] as const)
-        budget.run(uid, m, category, limit);
-      const prior = new Date(m + "-01T00:00:00Z");
-      prior.setUTCMonth(prior.getUTCMonth() - 1);
-      const previous = prior.toISOString().slice(0, 7);
-      // January 2000 has no preceding month inside the supported date range.
-      if (previous < "2000-01") return;
-      add.run(
-        uid,
-        "income",
-        "Allowance",
-        130000,
-        previous + "-01",
-        "Previous month · fictional",
-      );
-      add.run(
-        uid,
-        "expense",
-        "Housing",
-        52000,
-        previous + "-02",
-        "Previous month · fictional",
-      );
-      add.run(
-        uid,
-        "expense",
-        "Food",
-        14200,
-        previous + "-14",
-        "Previous month · fictional",
-      );
+  createDemoUser(
+    name: string,
+    email: string,
+    passwordHash: string,
+    selectedMonth: string,
+  ) {
+    return this.atomic(() => {
+      const row = this.db
+        .prepare(
+          "INSERT INTO users(name,email,password_hash,is_demo) VALUES(?,?,?,1) ON CONFLICT(email) DO NOTHING",
+        )
+        .run(name, email, passwordHash);
+      if (!row.changes) return;
+      const uid = Number(row.lastInsertRowid);
+      this.populateDemo(uid, selectedMonth);
+      return uid;
     });
+  }
+  demo(uid: number, m: string) {
+    this.atomic(() => this.populateDemo(uid, m));
+  }
+  private populateDemo(uid: number, m: string) {
+    if (
+      this.db
+        .prepare("SELECT id FROM transactions WHERE user_id=? LIMIT 1")
+        .get(uid) ||
+      this.db
+        .prepare("SELECT category FROM budgets WHERE user_id=? LIMIT 1")
+        .get(uid)
+    )
+      throw new AppError(
+        409,
+        "Demo data is only available for an empty workspace.",
+      );
+    const add = this.db.prepare(
+      "INSERT INTO transactions(user_id,type,category,amount_cents,date,note) VALUES(?,?,?,?,?,?)",
+    );
+    const items: [string, string, number, number, string][] = [
+      ["income", "Allowance", 120000, 1, "Monthly support · fictional"],
+      ["income", "Work", 28000, 5, "Campus library shift · fictional"],
+      ["expense", "Housing", 52000, 2, "Shared apartment · fictional"],
+      ["expense", "Food", 1245, 3, "Groceries · fictional"],
+      ["expense", "Transport", 3500, 4, "Monthly student pass · fictional"],
+      ["expense", "Study", 2400, 6, "Secondhand textbooks · fictional"],
+      ["expense", "Food", 1860, 8, "Market groceries · fictional"],
+      ["expense", "Leisure", 1200, 9, "Movie with friends · fictional"],
+      ["expense", "Health", 1800, 10, "Pharmacy · fictional"],
+      ["expense", "Food", 650, 11, "Lunch on campus · fictional"],
+      ["expense", "Food", 2735, 12, "Weekly groceries · fictional"],
+      ["expense", "Other", 850, 13, "Laundry · fictional"],
+    ];
+    for (const [type, category, cents, day, note] of items)
+      add.run(
+        uid,
+        type,
+        category,
+        cents,
+        `${m}-${String(day).padStart(2, "0")}`,
+        note,
+      );
+    const budget = this.db.prepare(
+      "INSERT INTO budgets(user_id,month,category,limit_cents) VALUES(?,?,?,?)",
+    );
+    for (const [category, limit] of [
+      ["Food", 16000],
+      ["Housing", 55000],
+      ["Transport", 5000],
+      ["Study", 8000],
+      ["Leisure", 6000],
+    ] as const)
+      budget.run(uid, m, category, limit);
+    const prior = new Date(m + "-01T00:00:00Z");
+    prior.setUTCMonth(prior.getUTCMonth() - 1);
+    const previous = prior.toISOString().slice(0, 7);
+    // January 2000 has no preceding month inside the supported date range.
+    if (previous < "2000-01") return;
+    add.run(
+      uid,
+      "income",
+      "Allowance",
+      130000,
+      previous + "-01",
+      "Previous month · fictional",
+    );
+    add.run(
+      uid,
+      "expense",
+      "Housing",
+      52000,
+      previous + "-02",
+      "Previous month · fictional",
+    );
+    add.run(
+      uid,
+      "expense",
+      "Food",
+      14200,
+      previous + "-14",
+      "Previous month · fictional",
+    );
   }
 }
